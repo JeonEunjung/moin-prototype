@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="MOIN">
+<title>MOIN - 환율 예약송금 프로토타입</title>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --blue: #0082FF;
+    --blue-light: #2393FF;
+    --blue-pale: #C8E2FF;
+    --red: #FF5D70;
+    --grey00: #FFFFFF;
+    --grey05: #F7F7F8;
+    --grey10: #F3F5F8;
+    --grey20: #E6E9EB;
+    --grey30: #DADDDF;
+    --grey45: #A9ABB4;
+    --grey70: #424648;
+    --grey80: #2F3133;
+    --grey90: #1A1B22;
+    --green: #00B894;
+    --font: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  .device {
+    width: 375px;
+    height: 812px;
+    background: var(--grey00);
+    position: relative;
+    overflow: hidden;
+    border-radius: 40px;
+    box-shadow: 0 0 0 4px #1a1a1a, 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  /* Mobile: full screen, no frame */
+  @media (max-width: 768px) {
+    body {
+      background: var(--grey00) !important;
+    }
+    .device {
+      width: 100vw !important;
+      height: 100dvh !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+    .status-bar {
+      display: none !important;
+    }
+    .home-indicator {
+      display: none !important;
+    }
+  }
+
+  /* Screen container */
+  .screen {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: var(--grey00);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+    z-index: 1;
+  }
+  .screen.active {
+    transform: translateX(0);
+    z-index: 2;
+  }
+  .screen.prev {
+    transform: translateX(-30%);
+    z-index: 1;
+  }
+  .screen.exit-left {
+    transform: translateX(-30%);
+    z-index: 1;
+  }
+
+  /* Status bar */
+  .status-bar {
+    height: 54px;
+    padding: 18px 24px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .status-bar .time { font-weight: 600; font-size: 17px; }
+  .status-bar .icons { display: flex; gap: 6px; align-items: center; }
+
+  /* Nav header */
+  .nav-header {
+    height: 52px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .nav-header .back-btn,
+  .nav-header .close-btn {
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    border: none; background: none;
+    border-radius: 50%;
+    transition: background 0.15s;
+  }
+  .nav-header .back-btn:active,
+  .nav-header .close-btn:active {
+    background: var(--grey05);
+  }
+  .nav-header .back-btn svg,
+  .nav-header .close-btn svg {
+    width: 24px; height: 24px;
+  }
+
+  /* Content area */
+  .screen-content {
+    flex: 1;
+    padding: 0 24px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .screen-title {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--grey90);
+    margin-bottom: 8px;
+  }
+  .screen-subtitle {
+    font-size: 14px;
+    color: var(--grey45);
+    margin-bottom: 24px;
+  }
+
+  /* ===== NUMPAD INPUT FIELD ===== */
+  .input-display {
+    background: var(--grey05);
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    margin-bottom: 12px;
+    min-height: 72px;
+    transition: background 0.2s;
+  }
+  .input-display.focused {
+    background: var(--grey05);
+  }
+  .input-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--grey90);
+    text-align: left;
+    line-height: 1;
+    position: relative;
+    min-width: 20px;
+    flex-shrink: 0;
+  }
+  .input-value.empty {
+    color: var(--grey30);
+  }
+  .input-value .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 32px;
+    background: var(--blue);
+    margin-left: 1px;
+    vertical-align: middle;
+    animation: blink 1s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+  .input-suffix {
+    font-size: 20px;
+    color: var(--grey30);
+    font-weight: 400;
+    white-space: nowrap;
+    margin-left: 4px;
+    line-height: 1;
+  }
+  .input-unit {
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--grey45);
+  }
+
+  /* Rate feedback */
+  .rate-feedback {
+    font-size: 14px;
+    margin-bottom: 16px;
+    min-height: 20px;
+    transition: all 0.3s ease;
+    overflow: hidden;
+  }
+  .rate-feedback.cheaper {
+    color: var(--grey70);
+  }
+  .rate-feedback.cheaper .pct {
+    color: var(--blue-light);
+    font-weight: 600;
+  }
+  .rate-feedback.expensive {
+    color: var(--red);
+  }
+  .rate-feedback span {
+    display: inline-block;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+
+  /* Amount conversion display */
+  .conversion-group {
+    margin-bottom: 16px;
+  }
+  .conversion-row {
+    background: var(--grey05);
+    padding: 20px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s;
+  }
+  .conversion-row:first-child {
+    border-radius: 8px 8px 0 0;
+    border-bottom: 2px solid var(--grey00);
+  }
+  .conversion-row:last-child {
+    border-radius: 0 0 8px 8px;
+  }
+  .conversion-row .flag-icon {
+    width: 32px; height: 24px;
+    border-radius: 4px;
+    object-fit: cover;
+    background: var(--grey20);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    overflow: hidden;
+  }
+  .conversion-row .row-right {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .conversion-row .amount {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--grey70);
+    transition: all 0.15s ease;
+  }
+  .conversion-row.focused .amount {
+    color: var(--grey90);
+  }
+  .conversion-row .amount .input-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 26px;
+    background: var(--blue);
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: blink 1s ease-in-out infinite;
+  }
+  .conversion-row .amount.typing {
+    transform: scale(1.02);
+  }
+  .conversion-row .currency {
+    font-size: 16px;
+    color: var(--grey70);
+  }
+  .conversion-row .label {
+    font-size: 13px;
+    color: var(--grey45);
+    transition: opacity 0.15s ease;
+  }
+  .exchange-icon {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--grey30);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    z-index: 2;
+    margin: -14px auto;
+  }
+
+  /* Info rows */
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+  }
+  .info-row .label {
+    font-size: 14px;
+    color: var(--grey45);
+  }
+  .info-row .value {
+    font-size: 14px;
+    color: var(--grey70);
+  }
+  .info-row .value.link {
+    color: var(--grey45);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+
+  /* ===== NUMPAD ===== */
+  .numpad-area {
+    flex-shrink: 0;
+    margin-top: auto;
+  }
+  .cta-button {
+    width: 100%;
+    padding: 18px;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    color: white;
+    background: var(--blue-pale);
+    transition: background 0.25s ease, transform 0.1s ease;
+    letter-spacing: -0.02em;
+  }
+  .cta-button.enabled {
+    background: var(--blue);
+  }
+  .cta-button:active.enabled {
+    transform: scale(0.98);
+    background: #006AD6;
+  }
+  .numpad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    background: var(--grey05);
+    border-top: 1px solid var(--grey20);
+  }
+  .numpad-key {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--grey90);
+    cursor: pointer;
+    border: none;
+    background: var(--grey00);
+    margin: 1px;
+    transition: background 0.1s;
+    user-select: none;
+    -webkit-user-select: none;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .numpad-key:active {
+    background: var(--grey20);
+  }
+  .numpad-key .sub {
+    font-size: 10px;
+    color: var(--grey45);
+    letter-spacing: 2px;
+    margin-top: 2px;
+  }
+  .numpad-key.empty {
+    background: var(--grey05);
+    cursor: default;
+  }
+  .numpad-key .key-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+  }
+  /* Ripple effect */
+  .numpad-key .ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.08);
+    transform: scale(0);
+    animation: ripple-anim 0.4s ease-out;
+    pointer-events: none;
+  }
+  @keyframes ripple-anim {
+    to { transform: scale(4); opacity: 0; }
+  }
+
+  /* ===== BOTTOM SHEET ===== */
+  .overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0);
+    z-index: 10;
+    pointer-events: none;
+    transition: background 0.35s ease;
+  }
+  .overlay.show {
+    background: rgba(0,0,0,0.4);
+    pointer-events: auto;
+  }
+  .bottom-sheet {
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 100%;
+    background: white;
+    border-radius: 24px 24px 0 0;
+    z-index: 11;
+    transform: translateY(100%);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    max-height: 85%;
+    display: flex;
+    flex-direction: column;
+  }
+  .bottom-sheet.show {
+    transform: translateY(0);
+  }
+  .sheet-handle {
+    width: 40px; height: 5px;
+    background: var(--grey20);
+    border-radius: 3px;
+    margin: 12px auto 0;
+    flex-shrink: 0;
+  }
+  .sheet-title {
+    font-size: 22px;
+    font-weight: 700;
+    padding: 20px 24px 16px;
+    flex-shrink: 0;
+  }
+  .sheet-search {
+    margin: 0 24px 12px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: var(--grey05);
+    border: none;
+    font-size: 15px;
+    width: calc(100% - 48px);
+    outline: none;
+    font-family: var(--font);
+    color: var(--grey90);
+    flex-shrink: 0;
+  }
+  .sheet-search::placeholder { color: var(--grey45); }
+  .country-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 40px;
+  }
+  .country-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 24px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .country-item:active { background: var(--grey05); }
+  .country-item .flag { font-size: 28px; width: 36px; text-align: center; }
+  .country-item .name { font-size: 16px; font-weight: 500; color: var(--grey90); }
+  .country-item .code { font-size: 16px; color: var(--grey45); margin-left: 4px; }
+
+  /* ===== RECIPIENT SELECT ===== */
+  .recipient-new,
+  .recipient-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.15s;
+  }
+  .recipient-new:active,
+  .recipient-item:active {
+    background: var(--grey05);
+    margin: 0 -8px;
+    padding: 14px 8px;
+  }
+
+  /* ===== CONFIRM SCREEN ===== */
+  .confirm-summary {
+    background: var(--grey00);
+    padding: 0 0 24px;
+  }
+  .confirm-title {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.45;
+    color: var(--grey90);
+    margin-bottom: 32px;
+  }
+  .confirm-title .highlight {
+    color: var(--blue);
+  }
+  .confirm-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 14px 0;
+  }
+  .confirm-row .label {
+    font-size: 15px;
+    color: var(--grey45);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .confirm-row .value {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--grey90);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .confirm-row .value .chevron { color: var(--grey45); }
+  .divider {
+    height: 8px;
+    background: var(--grey05);
+    margin: 0 -24px;
+  }
+
+  /* Notice section */
+  .notice-section {
+    padding-top: 24px;
+  }
+  .notice-title {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+  .notice-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--grey05);
+    border-radius: 12px;
+    cursor: pointer;
+    margin-bottom: 16px;
+    transition: all 0.2s;
+  }
+  .notice-checkbox .check-circle {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--grey30);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    flex-shrink: 0;
+  }
+  .notice-checkbox.checked .check-circle {
+    background: var(--blue);
+    border-color: var(--blue);
+    transform: scale(1);
+  }
+  .notice-checkbox .check-circle svg {
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all 0.2s ease 0.1s;
+  }
+  .notice-checkbox.checked .check-circle svg {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .notice-checkbox .check-text {
+    font-size: 15px;
+    color: var(--grey70);
+  }
+  .notice-list {
+    list-style: none;
+    padding: 0 4px;
+  }
+  .notice-list li {
+    font-size: 13px;
+    color: var(--grey45);
+    line-height: 1.7;
+    padding-left: 12px;
+    position: relative;
+  }
+  .notice-list li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+  }
+
+  /* ===== COMPLETE SCREEN ===== */
+  .complete-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .complete-badge .icon {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--blue);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .complete-badge .text {
+    font-size: 14px;
+    color: var(--grey45);
+  }
+  .complete-title {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.45;
+    color: var(--grey90);
+    margin-bottom: 40px;
+  }
+  .steps-section {
+    padding-top: 28px;
+  }
+  .steps-title {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 24px;
+  }
+  .step-item {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 28px;
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  .step-item.show {
+    opacity: 1;
+    transform: translateY(0);
+    transition: all 0.4s ease;
+  }
+  .step-num {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--grey05);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--blue);
+    flex-shrink: 0;
+  }
+  .step-text {
+    padding-top: 4px;
+  }
+  .step-text .main {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--grey90);
+    line-height: 1.5;
+  }
+  .step-text .sub {
+    font-size: 13px;
+    color: var(--grey45);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  /* Bottom fixed button */
+  .bottom-cta {
+    padding: 12px 24px 40px;
+    flex-shrink: 0;
+    margin-top: auto;
+  }
+  .bottom-cta .btn {
+    width: 100%;
+    padding: 18px;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    color: white;
+    background: var(--blue);
+    transition: all 0.2s;
+    font-family: var(--font);
+    letter-spacing: -0.02em;
+  }
+  .bottom-cta .btn:active {
+    transform: scale(0.98);
+    background: #006AD6;
+  }
+  .bottom-cta .btn.disabled {
+    background: var(--blue-pale);
+    pointer-events: none;
+  }
+
+  /* Home indicator */
+  .home-indicator {
+    height: 34px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 8px;
+    flex-shrink: 0;
+  }
+  .home-indicator .bar {
+    width: 134px; height: 5px;
+    background: var(--grey90);
+    border-radius: 100px;
+  }
+
+  /* Number pop animation */
+  @keyframes numPop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+  .num-pop {
+    animation: numPop 0.12s ease;
+  }
+
+  /* Value change animation */
+  @keyframes slideUp {
+    from { transform: translateY(8px); opacity: 0.5; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .slide-up {
+    animation: slideUp 0.15s ease;
+  }
+</style>
+</head>
+<body>
+
+<div class="device">
+
+  <!-- ===== SCREEN 1: HOME (simplified) ===== -->
+  <div class="screen active" id="screen-home">
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <span class="icons">
+        <svg width="17" height="12" fill="none"><rect x="0" y="3" width="3" height="9" rx="1" fill="#1A1B22"/><rect x="4.5" y="2" width="3" height="10" rx="1" fill="#1A1B22"/><rect x="9" y="0" width="3" height="12" rx="1" fill="#1A1B22"/><rect x="13.5" y="0" width="3" height="12" rx="1" fill="#1A1B22"/></svg>
+        <svg width="16" height="12" fill="none"><path d="M1 4.5C3.5 1.5 7 0 8 0s5 1.5 7 4.5" stroke="#1A1B22" stroke-width="1.5"/><path d="M3.5 7C5 5.5 6.5 4.5 8 4.5S11 5.5 12.5 7" stroke="#1A1B22" stroke-width="1.5"/><circle cx="8" cy="10" r="1.5" fill="#1A1B22"/></svg>
+        <svg width="27" height="13" fill="none"><rect x="0" y="1" width="23" height="11" rx="3" stroke="#1A1B22" stroke-width="1"/><rect x="24" y="4.5" width="2" height="4" rx="1" fill="#1A1B22"/><rect x="2" y="3" width="19" height="7" rx="1.5" fill="#1A1B22"/></svg>
+      </span>
+    </div>
+
+    <div style="padding: 12px 20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <svg width="64" height="24" viewBox="0 0 64 24"><text x="0" y="18" font-family="var(--font)" font-weight="800" font-size="16" fill="#0082FF">moin</text></svg>
+        <div style="display:flex; gap:8px;">
+          <div style="width:28px;height:28px;"></div>
+          <div style="width:28px;height:28px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1; overflow-y:auto; padding: 8px 12px 140px;">
+      <!-- Rate card -->
+      <div style="background:white; border-radius:12px; padding:20px; box-shadow: 0 8px 12px rgba(222,229,240,0.3);">
+        <div style="display:flex; align-items:center; gap:4px; margin-bottom:4px;">
+          <span style="font-size:14px; color:var(--grey70);">일본 엔화 JPY</span>
+          <svg width="16" height="16" fill="none"><path d="M6 4l4 4-4 4" stroke="var(--grey70)" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <div style="font-size:28px; font-weight:700; color:var(--grey90);">916.8321 <span style="font-size:22px;">원</span></div>
+        <div style="font-size:14px; color:var(--red); margin-top:2px;">어제보다 + 1.12 (0.13%)</div>
+
+        <div style="margin-top:20px;">
+          <div style="background:var(--grey05); border-radius:8px 8px 0 0; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid white;">
+            <span style="font-size:18px;">🇰🇷</span>
+            <div style="display:flex; align-items:baseline; gap:6px;">
+              <span style="font-size:20px; font-weight:700;">1,000,000</span>
+              <span style="font-size:15px; color:var(--grey70);">KRW</span>
+            </div>
+          </div>
+          <div style="background:var(--grey05); border-radius:0 0 8px 8px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-size:18px;">🇯🇵</span>
+              <svg width="12" height="8" fill="none"><path d="M1 2l5 4 5-4" stroke="var(--grey70)" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <div style="display:flex; align-items:baseline; gap:6px;">
+              <span style="font-size:20px; font-weight:700;">1,079.8</span>
+              <span style="font-size:15px; color:var(--grey70);">JPY</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="text-align:center; font-size:12px; color:var(--grey45); margin-top:10px;">일반송금 예상 수수료가 모두 포함된 금액이에요</div>
+
+        <button style="width:100%; padding:16px; background:var(--blue); color:white; border:none; border-radius:8px; font-size:16px; font-weight:700; margin-top:12px; cursor:pointer; font-family:var(--font);">송금하기</button>
+
+        <div id="btn-reserve" style="display:flex; align-items:center; justify-content:center; gap:4px; padding:12px; cursor:pointer; margin-top:4px;">
+          <span style="font-size:14px; color:var(--blue-light);">원하는 환율에 송금하기</span>
+          <svg width="16" height="16" fill="none"><path d="M6 4l4 4-4 4" stroke="var(--blue-light)" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 2: TARGET RATE ===== -->
+  <div class="screen" id="screen-rate">
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <span class="icons">
+        <svg width="17" height="12" fill="none"><rect x="0" y="3" width="3" height="9" rx="1" fill="#1A1B22"/><rect x="4.5" y="2" width="3" height="10" rx="1" fill="#1A1B22"/><rect x="9" y="0" width="3" height="12" rx="1" fill="#1A1B22"/><rect x="13.5" y="0" width="3" height="12" rx="1" fill="#1A1B22"/></svg>
+        <svg width="16" height="12" fill="none"><path d="M1 4.5C3.5 1.5 7 0 8 0s5 1.5 7 4.5" stroke="#1A1B22" stroke-width="1.5"/><path d="M3.5 7C5 5.5 6.5 4.5 8 4.5S11 5.5 12.5 7" stroke="#1A1B22" stroke-width="1.5"/><circle cx="8" cy="10" r="1.5" fill="#1A1B22"/></svg>
+        <svg width="27" height="13" fill="none"><rect x="0" y="1" width="23" height="11" rx="3" stroke="#1A1B22" stroke-width="1"/><rect x="24" y="4.5" width="2" height="4" rx="1" fill="#1A1B22"/><rect x="2" y="3" width="19" height="7" rx="1.5" fill="#1A1B22"/></svg>
+      </span>
+    </div>
+    <div class="nav-header" style="justify-content:flex-end;">
+      <button class="close-btn" onclick="goBack('screen-rate','screen-home')">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="#1A1B22" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="screen-content">
+      <h1 class="screen-title">환율이 얼마가 되면 보낼까요?</h1>
+      <p class="screen-subtitle">현재 환율  <span id="rate-currency-unit">1</span> <span id="rate-currency-code">AUD</span> = 916.8321원</p>
+
+      <div class="input-display focused">
+        <div class="input-value" id="rate-display"><span class="cursor"></span></div>
+        <span class="input-suffix">원 이하일 때</span>
+      </div>
+      <div class="rate-feedback" id="rate-feedback"></div>
+    </div>
+    <div class="numpad-area">
+      <button class="cta-button" id="rate-cta" onclick="goTo('screen-rate','screen-amount')">다음</button>
+      <div class="numpad" id="numpad-rate"></div>
+    </div>
+    <div class="home-indicator"><div class="bar"></div></div>
+  </div>
+
+  <!-- ===== SCREEN 3: AMOUNT ===== -->
+  <div class="screen" id="screen-amount">
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <span class="icons">
+        <svg width="17" height="12" fill="none"><rect x="0" y="3" width="3" height="9" rx="1" fill="#1A1B22"/><rect x="4.5" y="2" width="3" height="10" rx="1" fill="#1A1B22"/><rect x="9" y="0" width="3" height="12" rx="1" fill="#1A1B22"/><rect x="13.5" y="0" width="3" height="12" rx="1" fill="#1A1B22"/></svg>
+        <svg width="16" height="12" fill="none"><path d="M1 4.5C3.5 1.5 7 0 8 0s5 1.5 7 4.5" stroke="#1A1B22" stroke-width="1.5"/><path d="M3.5 7C5 5.5 6.5 4.5 8 4.5S11 5.5 12.5 7" stroke="#1A1B22" stroke-width="1.5"/><circle cx="8" cy="10" r="1.5" fill="#1A1B22"/></svg>
+        <svg width="27" height="13" fill="none"><rect x="0" y="1" width="23" height="11" rx="3" stroke="#1A1B22" stroke-width="1"/><rect x="24" y="4.5" width="2" height="4" rx="1" fill="#1A1B22"/><rect x="2" y="3" width="19" height="7" rx="1.5" fill="#1A1B22"/></svg>
+      </span>
+    </div>
+    <div class="nav-header">
+      <button class="back-btn" onclick="goBack('screen-amount','screen-rate')">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M15 19l-7-7 7-7" stroke="#1A1B22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="screen-content">
+      <h1 class="screen-title" id="amount-title"><span id="amount-rate-link" onclick="goBack('screen-amount','screen-rate')" style="text-decoration:underline; text-underline-offset:4px; cursor:pointer;">1 AUD = 900원 이하일 때</span><br>얼마나 송금할까요?</h1>
+
+      <div class="conversion-group" style="margin-top:24px;">
+        <div class="conversion-row" id="row-krw" onclick="switchAmountFocus('krw')" style="cursor:pointer;">
+          <span class="label" id="label-krw" style="display:none;">예상</span>
+          <div class="row-right" style="margin-left:auto;">
+            <span class="amount" id="amount-krw">0<span class="input-cursor"></span></span>
+            <span class="currency">KRW</span>
+          </div>
+        </div>
+        <div class="exchange-icon">
+          <svg width="16" height="16" fill="none"><path d="M8 3v10M8 13l-3-3M8 13l3-3" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <div class="conversion-row" id="row-foreign" onclick="switchAmountFocus('foreign')" style="cursor:pointer;">
+          <span class="label" id="label-foreign">예상</span>
+          <div class="row-right" style="margin-left:auto;">
+            <span class="amount" id="amount-aud">0</span>
+            <span class="currency" id="amount-currency-code">AUD</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-row">
+        <span class="label">적용 혜택</span>
+        <span class="value">100% 환율우대</span>
+      </div>
+      <div class="info-row">
+        <span class="label">예상 수수료 (송금 금액에 포함)</span>
+        <span class="value link">수수료 자세히</span>
+      </div>
+    </div>
+    <div class="numpad-area">
+      <button class="cta-button" id="amount-cta" onclick="goTo('screen-amount','screen-recipient')">다음</button>
+      <div class="numpad" id="numpad-amount"></div>
+    </div>
+    <div class="home-indicator"><div class="bar"></div></div>
+  </div>
+
+  <!-- ===== SCREEN 3.5: RECIPIENT SELECT ===== -->
+  <div class="screen" id="screen-recipient">
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <span class="icons">
+        <svg width="17" height="12" fill="none"><rect x="0" y="3" width="3" height="9" rx="1" fill="#1A1B22"/><rect x="4.5" y="2" width="3" height="10" rx="1" fill="#1A1B22"/><rect x="9" y="0" width="3" height="12" rx="1" fill="#1A1B22"/><rect x="13.5" y="0" width="3" height="12" rx="1" fill="#1A1B22"/></svg>
+        <svg width="16" height="12" fill="none"><path d="M1 4.5C3.5 1.5 7 0 8 0s5 1.5 7 4.5" stroke="#1A1B22" stroke-width="1.5"/><path d="M3.5 7C5 5.5 6.5 4.5 8 4.5S11 5.5 12.5 7" stroke="#1A1B22" stroke-width="1.5"/><circle cx="8" cy="10" r="1.5" fill="#1A1B22"/></svg>
+        <svg width="27" height="13" fill="none"><rect x="0" y="1" width="23" height="11" rx="3" stroke="#1A1B22" stroke-width="1"/><rect x="24" y="4.5" width="2" height="4" rx="1" fill="#1A1B22"/><rect x="2" y="3" width="19" height="7" rx="1.5" fill="#1A1B22"/></svg>
+      </span>
+    </div>
+    <div class="nav-header">
+      <button class="back-btn" onclick="goBack('screen-recipient','screen-amount')">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M15 19l-7-7 7-7" stroke="#1A1B22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="screen-content" style="padding-bottom:40px;">
+      <h1 class="screen-title" style="margin-bottom:24px;">누구에게 보낼까요?</h1>
+
+      <!-- 새로 입력하기 -->
+      <div class="recipient-new" onclick="selectRecipient('새 수취인')">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--grey05);display:flex;align-items:center;justify-content:center;">
+          <svg width="20" height="20" fill="none"><path d="M10 4v12M4 10h12" stroke="var(--grey45)" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <span style="flex:1;font-size:16px;font-weight:500;color:var(--grey90);">새로 입력하기</span>
+        <svg width="24" height="24" fill="none"><path d="M9 6l6 6-6 6" stroke="var(--grey45)" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+
+      <!-- 구분선 -->
+      <div style="height:6px;background:var(--grey05);margin:20px -24px;"></div>
+
+      <!-- 받은 송금 정보 -->
+      <div style="padding-top:20px;">
+        <h3 style="font-size:15px;font-weight:700;color:var(--grey90);margin-bottom:16px;">받은 송금 정보</h3>
+        <div class="recipient-item" onclick="selectRecipient('Moin Kim')">
+          <div style="width:40px;height:40px;border-radius:50%;background:#E8F4FD;display:flex;align-items:center;justify-content:center;">
+            <svg width="20" height="16" fill="none"><path d="M2 4l8 5 8-5" stroke="var(--blue)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><rect x="1" y="3" width="18" height="12" rx="2" stroke="var(--blue)" stroke-width="1.5"/></svg>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:15px;font-weight:600;color:var(--grey90);">Moin Kim</div>
+            <div style="font-size:13px;color:var(--blue);margin-top:2px;">받는 분이 직접 입력했어요</div>
+          </div>
+          <div style="padding:6px 14px;background:var(--blue);color:white;border-radius:6px;font-size:13px;font-weight:600;">확인하기</div>
+        </div>
+      </div>
+
+      <!-- 구분선 -->
+      <div style="height:1px;background:var(--grey20);margin:20px 0;"></div>
+
+      <!-- 최근 송금한 계좌 -->
+      <div>
+        <h3 style="font-size:15px;font-weight:700;color:var(--grey90);margin-bottom:16px;">최근 송금한 계좌</h3>
+        <div class="recipient-item" onclick="selectRecipient('ヤマダ タロウ')">
+          <div style="width:40px;height:40px;border-radius:50%;background:var(--grey05);display:flex;align-items:center;justify-content:center;font-size:20px;">🇯🇵</div>
+          <div style="flex:1;">
+            <div style="font-size:15px;font-weight:600;color:var(--grey90);">ヤマダ タロウ</div>
+            <div style="font-size:13px;color:var(--grey45);margin-top:2px;">ゆうちょ銀行 · 1234567</div>
+          </div>
+          <svg width="24" height="24" fill="none"><path d="M12 2l2.09 6.26L20 9.27l-4.91 3.82L16.18 20 12 16.77 7.82 20l1.09-6.91L4 9.27l5.91-1.01L12 2z" fill="#FFCA28"/></svg>
+        </div>
+        <div class="recipient-item" onclick="selectRecipient('タナカ ハナコ')">
+          <div style="width:40px;height:40px;border-radius:50%;background:var(--grey05);display:flex;align-items:center;justify-content:center;font-size:20px;">🇯🇵</div>
+          <div style="flex:1;">
+            <div style="font-size:15px;font-weight:600;color:var(--grey90);">タナカ ハナコ</div>
+            <div style="font-size:13px;color:var(--grey45);margin-top:2px;">三菱UFJ銀行 · 7654321</div>
+          </div>
+          <svg width="24" height="24" fill="none"><path d="M12 2l2.09 6.26L20 9.27l-4.91 3.82L16.18 20 12 16.77 7.82 20l1.09-6.91L4 9.27l5.91-1.01L12 2z" fill="#FFCA28"/></svg>
+        </div>
+        <div class="recipient-item" onclick="selectRecipient('スズキ イチロウ')">
+          <div style="width:40px;height:40px;border-radius:50%;background:var(--grey05);display:flex;align-items:center;justify-content:center;font-size:20px;">🇯🇵</div>
+          <div style="flex:1;">
+            <div style="font-size:15px;font-weight:600;color:var(--grey90);">スズキ イチロウ</div>
+            <div style="font-size:13px;color:var(--grey45);margin-top:2px;">みずほ銀行 · 12911581030</div>
+          </div>
+          <svg width="24" height="24" fill="none"><path d="M12 2l2.09 6.26L20 9.27l-4.91 3.82L16.18 20 12 16.77 7.82 20l1.09-6.91L4 9.27l5.91-1.01L12 2z" stroke="var(--grey30)" stroke-width="1.5" fill="none"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 4: CONFIRM ===== -->
+  <div class="screen" id="screen-confirm">
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <span class="icons">
+        <svg width="17" height="12" fill="none"><rect x="0" y="3" width="3" height="9" rx="1" fill="#1A1B22"/><rect x="4.5" y="2" width="3" height="10" rx="1" fill="#1A1B22"/><rect x="9" y="0" width="3" height="12" rx="1" fill="#1A1B22"/><rect x="13.5" y="0" width="3" height="12" rx="1" fill="#1A1B22"/></svg>
+        <svg width="16" height="12" fill="none"><path d="M1 4.5C3.5 1.5 7 0 8 0s5 1.5 7 4.5" stroke="#1A1B22" stroke-width="1.5"/><path d="M3.5 7C5 5.5 6.5 4.5 8 4.5S11 5.5 12.5 7" stroke="#1A1B22" stroke-width="1.5"/><circle cx="8" cy="10" r="1.5" fill="#1A1B22"/></svg>
+        <svg width="27" height="13" fill="none"><rect x="0" y="1" width="23" height="11" rx="3" stroke="#1A1B22" stroke-width="1"/><rect x="24" y="4.5" width="2" height="4" rx="1" fill="#1A1B22"/><rect x="2" y="3" width="19" height="7" rx="1.5" fill="#1A1B22"/></svg>
+      </span>
+    </div>
+    <div class="nav-header">
+      <button class="back-btn" onclick="goBack('screen-confirm','screen-amount')">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M15 19l-7-7 7-7" stroke="#1A1B22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="screen-content" style="padding-bottom:0;">
+      <div class="confirm-summary">
+        <h1 class="confirm-title">
+          환율이 <span id="confirm-rate-val">900</span>원 이하일 때<br>
+          <span class="highlight" id="confirm-amount-val">50,000원</span> 송금할게요
+        </h1>
+        <div class="confirm-row">
+          <span class="label">예상 송금 금액
+            <svg width="16" height="16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--grey30)" stroke-width="1.5"/><text x="8" y="12" text-anchor="middle" font-size="10" fill="var(--grey45)">i</text></svg>
+          </span>
+          <span class="value" id="confirm-aud-val">49.12 AUD</span>
+        </div>
+        <div class="confirm-row">
+          <span class="label">받는 사람</span>
+          <span class="value">Moin Kim</span>
+        </div>
+        <div class="confirm-row">
+          <span class="label">종료일</span>
+          <span class="value">2026년 06월 09일까지 <span class="chevron">
+            <svg width="16" height="16" fill="none"><path d="M6 4l4 4-4 4" stroke="var(--grey45)" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </span></span>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="notice-section">
+        <h3 class="notice-title">유의사항 안내</h3>
+        <div class="notice-checkbox" id="notice-check" onclick="toggleNotice()">
+          <div class="check-circle">
+            <svg width="14" height="14" fill="none"><path d="M2 7l3.5 3.5L12 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span class="check-text">유의사항을 확인했습니다.</span>
+          <svg width="16" height="16" fill="none" style="margin-left:auto;"><path d="M6 4l4 4-4 4" stroke="var(--grey45)" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <ul class="notice-list">
+          <li>순간적인 환율 변동은 반영되지 않을 수 있어요.</li>
+          <li>쿠폰 할인은 적용되지 않아요.</li>
+          <li>목표 환율이 돼도 입금 대기 중인 송금이 있으면 예약이 취소돼요.</li>
+          <li>목표 환율 도달 후 1시간 안에 입금하지 않으면 송금이 취소돼요.</li>
+          <li>종료일이 지나면 예약이 자동으로 취소돼요.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="bottom-cta">
+      <button class="btn disabled" id="confirm-btn" onclick="goTo('screen-confirm','screen-complete')">송금 예약하기</button>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN 5: COMPLETE ===== -->
+  <div class="screen" id="screen-complete">
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <span class="icons">
+        <svg width="17" height="12" fill="none"><rect x="0" y="3" width="3" height="9" rx="1" fill="#1A1B22"/><rect x="4.5" y="2" width="3" height="10" rx="1" fill="#1A1B22"/><rect x="9" y="0" width="3" height="12" rx="1" fill="#1A1B22"/><rect x="13.5" y="0" width="3" height="12" rx="1" fill="#1A1B22"/></svg>
+        <svg width="16" height="12" fill="none"><path d="M1 4.5C3.5 1.5 7 0 8 0s5 1.5 7 4.5" stroke="#1A1B22" stroke-width="1.5"/><path d="M3.5 7C5 5.5 6.5 4.5 8 4.5S11 5.5 12.5 7" stroke="#1A1B22" stroke-width="1.5"/><circle cx="8" cy="10" r="1.5" fill="#1A1B22"/></svg>
+        <svg width="27" height="13" fill="none"><rect x="0" y="1" width="23" height="11" rx="3" stroke="#1A1B22" stroke-width="1"/><rect x="24" y="4.5" width="2" height="4" rx="1" fill="#1A1B22"/><rect x="2" y="3" width="19" height="7" rx="1.5" fill="#1A1B22"/></svg>
+      </span>
+    </div>
+    <div class="nav-header" style="justify-content:flex-end;">
+      <button class="close-btn" onclick="resetAll()">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="#1A1B22" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="screen-content">
+      <div class="complete-badge">
+        <div class="icon">
+          <svg width="14" height="14" fill="none"><path d="M2 7l3.5 3.5L12 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="text">송금 예약 완료</span>
+      </div>
+      <h1 class="complete-title">원하는 환율이 되면<br>자동으로 송금을 신청해드려요</h1>
+
+      <div class="divider" style="margin:0 -24px;"></div>
+
+      <div class="steps-section">
+        <h3 class="steps-title">이렇게 진행돼요</h3>
+        <div class="step-item" id="step1">
+          <div class="step-num">1</div>
+          <div class="step-text">
+            <div class="main">목표 환율이 되면 자동으로 송금을 신청하고 알림을 보내드려요.</div>
+          </div>
+        </div>
+        <div class="step-item" id="step2">
+          <div class="step-num">2</div>
+          <div class="step-text">
+            <div class="main">알림을 받으면 안내된 계좌로 입금해주세요.</div>
+            <div class="sub">1시간 안에 입금하지 않으면 자동으로 취소돼요.</div>
+          </div>
+        </div>
+        <div class="step-item" id="step3">
+          <div class="step-num">3</div>
+          <div class="step-text">
+            <div class="main">입금이 확인되면 송금을 진행해요.</div>
+            <div class="sub">문제가 있으면 모인이 알려드려요.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="bottom-cta">
+      <button class="btn" onclick="resetAll()">예약 내역 보기</button>
+    </div>
+  </div>
+
+  <!-- ===== BOTTOM SHEET: Country Select ===== -->
+  <div class="overlay" id="overlay" onclick="closeSheet()"></div>
+  <div class="bottom-sheet" id="country-sheet">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">송금할 국가를 선택해주세요</h2>
+    <input class="sheet-search" type="text" placeholder="국가 혹은 통화를 검색해주세요" id="country-search">
+    <div class="country-list" id="country-list"></div>
+  </div>
+
+</div>
+
+<script>
+// ===== STATE =====
+const CURRENT_RATE = 916.8321;
+let selectedCountry = { name: '호주', code: 'AUD', flag: '🇦🇺', rate: 916.8321 };
+let rateValue = '';
+let amountValue = '';
+let noticeChecked = false;
+
+const countries = [
+  { name: '영국', code: 'GBP', flag: '🇬🇧', rate: 1650.22, unit: 1 },
+  { name: '캐나다', code: 'CAD', flag: '🇨🇦', rate: 980.55, unit: 1 },
+  { name: '호주', code: 'AUD', flag: '🇦🇺', rate: 916.83, unit: 1 },
+  { name: '홍콩', code: 'HKD', flag: '🇭🇰', rate: 174.32, unit: 1 },
+  { name: '싱가포르', code: 'SGD', flag: '🇸🇬', rate: 1020.44, unit: 1 },
+  { name: '미국', code: 'USD', flag: '🇺🇸', rate: 1365.50, unit: 1 },
+  { name: '독일', code: 'EUR', flag: '🇩🇪', rate: 1480.33, unit: 1 },
+  { name: '일본', code: 'JPY', flag: '🇯🇵', rate: 916.83, unit: 100 },
+];
+
+// ===== NUMPAD BUILDER =====
+function buildNumpad(containerId, inputHandler, { showDot = false } = {}) {
+  const bottomLeft = showDot ? { val: '.', sub: '' } : { val: '', sub: '', empty: true };
+  const keys = [
+    { val: '1', sub: '' }, { val: '2', sub: 'ABC' }, { val: '3', sub: 'DEF' },
+    { val: '4', sub: 'GHI' }, { val: '5', sub: 'JKL' }, { val: '6', sub: 'MNO' },
+    { val: '7', sub: 'PGRS' }, { val: '8', sub: 'TUV' }, { val: '9', sub: 'WXYZ' },
+    bottomLeft, { val: '0', sub: '' }, { val: 'del', sub: '' },
+  ];
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  keys.forEach(k => {
+    const btn = document.createElement('button');
+    btn.className = 'numpad-key' + (k.empty ? ' empty' : '');
+    if (k.val === 'del') {
+      btn.innerHTML = '<svg width="24" height="24" fill="none"><path d="M9 7L4 12l5 5M4 12h16" stroke="#1A1B22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    } else if (!k.empty) {
+      btn.innerHTML = `<div class="key-content"><span>${k.val}</span>${k.sub ? `<span class="sub">${k.sub}</span>` : ''}</div>`;
+    }
+    if (!k.empty) {
+      btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        addRipple(btn, e);
+        inputHandler(k.val);
+      }, { passive: false });
+      btn.addEventListener('mousedown', (e) => {
+        addRipple(btn, e);
+        inputHandler(k.val);
+      });
+    }
+    container.appendChild(btn);
+  });
+}
+
+function addRipple(btn, e) {
+  const ripple = document.createElement('span');
+  ripple.className = 'ripple';
+  const rect = btn.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  ripple.style.width = ripple.style.height = size + 'px';
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  ripple.style.left = (clientX - rect.left - size/2) + 'px';
+  ripple.style.top = (clientY - rect.top - size/2) + 'px';
+  btn.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 400);
+}
+
+function formatNumber(str) {
+  if (!str) return '0';
+  if (str.includes('.')) {
+    const [intPart, decPart] = str.split('.');
+    return parseInt(intPart).toLocaleString() + '.' + (decPart || '');
+  }
+  return parseInt(str).toLocaleString();
+}
+
+// ===== RATE INPUT =====
+function handleRateInput(key) {
+  if (key === 'del') {
+    rateValue = rateValue.slice(0, -1);
+  } else if (key === '.') {
+    if (rateValue === '' || rateValue.includes('.')) return;
+    rateValue += '.';
+  } else {
+    if (rateValue === '' && key === '0') return;
+    // Allow up to 2 decimal places
+    const dotIndex = rateValue.indexOf('.');
+    if (dotIndex !== -1 && rateValue.length - dotIndex > 2) return;
+    // Limit integer part length
+    if (dotIndex === -1 && rateValue.length >= 6) return;
+    rateValue += key;
+  }
+  updateRateDisplay();
+}
+
+function updateRateDisplay() {
+  const display = document.getElementById('rate-display');
+  const feedback = document.getElementById('rate-feedback');
+  const cta = document.getElementById('rate-cta');
+
+  if (rateValue === '') {
+    display.innerHTML = '<span class="cursor"></span>';
+    display.classList.add('empty');
+    feedback.textContent = '';
+    feedback.className = 'rate-feedback';
+    cta.classList.remove('enabled');
+    return;
+  }
+
+  display.classList.remove('empty');
+  display.innerHTML = `<span class="num-pop">${formatNumber(rateValue)}</span><span class="cursor"></span>`;
+
+  const val = parseFloat(rateValue);
+  const currentRate = selectedCountry.rate;
+  if (val < currentRate) {
+    const pct = (((currentRate - val) / currentRate) * 100).toFixed(1);
+    feedback.innerHTML = `<span class="slide-up">지금 환율보다 <span class="pct">${pct}%</span> 저렴해요</span>`;
+    feedback.className = 'rate-feedback cheaper';
+    cta.classList.add('enabled');
+  } else if (val >= currentRate) {
+    feedback.innerHTML = `<span class="slide-up">지금 환율보다 높아요</span>`;
+    feedback.className = 'rate-feedback expensive';
+    cta.classList.add('enabled');
+  }
+}
+
+// ===== AMOUNT INPUT =====
+let amountFocus = 'krw'; // 'krw' or 'foreign'
+
+function switchAmountFocus(target) {
+  if (amountFocus === target) return;
+
+  const targetRate = parseFloat(rateValue) || selectedCountry.rate;
+  const unit = selectedCountry.unit;
+  const oldVal = parseFloat(amountValue) || 0;
+
+  // Convert old value to new field's currency
+  if (oldVal > 0) {
+    if (target === 'foreign') {
+      amountValue = String(parseFloat((oldVal * unit / targetRate).toFixed(2)));
+    } else {
+      amountValue = String(Math.round(oldVal * targetRate / unit));
+    }
+  }
+
+  amountFocus = target;
+
+  // Rebuild numpad: show dot for foreign, hide for KRW
+  buildNumpad('numpad-amount', handleAmountInput, { showDot: target === 'foreign' });
+
+  updateAmountDisplay();
+}
+
+function handleAmountInput(key) {
+  if (key === 'del') {
+    amountValue = amountValue.slice(0, -1);
+  } else if (key === '.') {
+    // Only allow dot for foreign currency
+    if (amountFocus !== 'foreign') return;
+    if (amountValue === '' || amountValue.includes('.')) return;
+    amountValue += '.';
+  } else {
+    // Decimal limit: 2 places for foreign
+    if (amountFocus === 'foreign' && amountValue.includes('.')) {
+      const dotIdx = amountValue.indexOf('.');
+      if (amountValue.length - dotIdx > 2) return;
+    }
+    if (amountValue.replace('.', '').length >= 9) return;
+    if (amountValue === '' && key === '0') return;
+    amountValue += key;
+  }
+  updateAmountDisplay();
+}
+
+function updateAmountDisplay() {
+  const krwEl = document.getElementById('amount-krw');
+  const audEl = document.getElementById('amount-aud');
+  const cta = document.getElementById('amount-cta');
+  const labelKrw = document.getElementById('label-krw');
+  const labelForeign = document.getElementById('label-foreign');
+
+  // Toggle "예상" labels with fade
+  labelKrw.style.opacity = amountFocus === 'krw' ? '0' : '1';
+  labelKrw.style.display = '';
+  labelForeign.style.opacity = amountFocus === 'foreign' ? '0' : '1';
+  labelForeign.style.display = '';
+  // Hide after fade for layout
+  setTimeout(() => {
+    labelKrw.style.display = amountFocus === 'krw' ? 'none' : '';
+    labelForeign.style.display = amountFocus === 'foreign' ? 'none' : '';
+  }, 150);
+
+  const targetRate = parseFloat(rateValue) || selectedCountry.rate;
+  const unit = selectedCountry.unit;
+
+  if (amountValue === '' || amountValue === '.') {
+    if (amountFocus === 'krw') {
+      krwEl.innerHTML = '0<span class="input-cursor"></span>';
+      audEl.textContent = '0';
+    } else {
+      audEl.innerHTML = '0<span class="input-cursor"></span>';
+      krwEl.textContent = '0';
+    }
+    cta.classList.remove('enabled');
+    return;
+  }
+
+  const val = parseFloat(amountValue);
+
+  if (amountFocus === 'krw') {
+    krwEl.innerHTML = `<span class="num-pop">${formatNumber(amountValue)}</span><span class="input-cursor"></span>`;
+    const converted = (val * unit / targetRate).toFixed(1);
+    audEl.innerHTML = `<span class="slide-up">${parseFloat(converted).toLocaleString()}</span>`;
+    cta.classList.toggle('enabled', val >= 10000);
+  } else {
+    audEl.innerHTML = `<span class="num-pop">${formatNumber(amountValue)}</span><span class="input-cursor"></span>`;
+    const converted = Math.round(val * targetRate / unit);
+    krwEl.innerHTML = `<span class="slide-up">${converted.toLocaleString()}</span>`;
+    cta.classList.toggle('enabled', converted >= 10000);
+  }
+}
+
+// ===== NAVIGATION =====
+function goTo(fromId, toId) {
+  const from = document.getElementById(fromId);
+  const to = document.getElementById(toId);
+
+  // Update confirm screen values
+  if (toId === 'screen-confirm') {
+    const targetRate = parseFloat(rateValue) || selectedCountry.rate;
+    const unit = selectedCountry.unit;
+    let krwAmount, foreignAmount;
+
+    if (amountFocus === 'krw') {
+      krwAmount = parseInt(amountValue) || 0;
+      foreignAmount = (krwAmount * unit / targetRate).toFixed(2);
+    } else {
+      foreignAmount = parseFloat(amountValue) || 0;
+      krwAmount = Math.round(foreignAmount * targetRate / unit);
+      foreignAmount = parseFloat(foreignAmount).toFixed(2);
+    }
+
+    document.getElementById('confirm-rate-val').textContent = formatNumber(rateValue);
+    document.getElementById('confirm-amount-val').textContent = krwAmount.toLocaleString() + '원';
+    document.getElementById('confirm-aud-val').textContent = `${foreignAmount} ${selectedCountry.code}`;
+    noticeChecked = false;
+    document.getElementById('notice-check').classList.remove('checked');
+    document.getElementById('confirm-btn').classList.add('disabled');
+  }
+
+  from.classList.remove('active');
+  from.classList.add('exit-left');
+  to.classList.add('active');
+
+  setTimeout(() => {
+    from.classList.remove('exit-left');
+  }, 450);
+
+  // Animate steps on complete screen
+  if (toId === 'screen-complete') {
+    setTimeout(() => {
+      ['step1','step2','step3'].forEach((id, i) => {
+        setTimeout(() => document.getElementById(id).classList.add('show'), i * 200);
+      });
+    }, 300);
+  }
+}
+
+function goBack(fromId, toId) {
+  const from = document.getElementById(fromId);
+  const to = document.getElementById(toId);
+
+  // Place "to" screen at -30% (off-screen left) instantly
+  to.style.transition = 'none';
+  to.style.transform = 'translateX(-30%)';
+  to.style.zIndex = '1';
+  to.classList.add('active');
+
+  // Current screen slides out to right
+  from.style.zIndex = '3';
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      // Animate both
+      to.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      from.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      to.style.transform = 'translateX(0)';
+      from.style.transform = 'translateX(100%)';
+
+      setTimeout(() => {
+        from.classList.remove('active');
+        from.style.transition = '';
+        from.style.transform = '';
+        from.style.zIndex = '';
+        to.style.transition = '';
+        to.style.zIndex = '';
+      }, 370);
+    });
+  });
+}
+
+// ===== BOTTOM SHEET =====
+function openSheet() {
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('country-sheet').classList.add('show');
+  renderCountries();
+}
+
+function closeSheet() {
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('country-sheet').classList.remove('show');
+}
+
+function renderCountries(filter = '') {
+  const list = document.getElementById('country-list');
+  const filtered = countries.filter(c =>
+    !filter || c.name.includes(filter) || c.code.toLowerCase().includes(filter.toLowerCase())
+  );
+  list.innerHTML = filtered.map(c => `
+    <div class="country-item" onclick="selectCountry('${c.code}')">
+      <span class="flag">${c.flag}</span>
+      <span class="name">${c.name}</span>
+      <span class="code">${c.code}</span>
+    </div>
+  `).join('');
+}
+
+function updateRateScreenLabels() {
+  document.getElementById('rate-currency-code').textContent = selectedCountry.code;
+  document.getElementById('rate-currency-unit').textContent = selectedCountry.unit;
+}
+
+function selectCountry(code) {
+  selectedCountry = countries.find(c => c.code === code);
+  closeSheet();
+
+  updateRateScreenLabels();
+
+  // Prefill with 2% cheaper than current rate
+  const prefillRate = (selectedCountry.rate * 0.98).toFixed(2);
+  rateValue = String(parseFloat(prefillRate));
+  updateRateDisplay();
+
+  setTimeout(() => goTo('screen-home', 'screen-rate'), 350);
+}
+
+document.getElementById('country-search').addEventListener('input', (e) => {
+  renderCountries(e.target.value);
+});
+
+// ===== NOTICE TOGGLE =====
+// ===== RECIPIENT SELECT =====
+function selectRecipient(name) {
+  // Update confirm screen with selected recipient
+  document.querySelector('#screen-confirm .confirm-row:nth-child(3) .value').childNodes[0].textContent = name;
+  goTo('screen-recipient', 'screen-confirm');
+}
+
+function toggleNotice() {
+  noticeChecked = !noticeChecked;
+  const el = document.getElementById('notice-check');
+  const btn = document.getElementById('confirm-btn');
+  el.classList.toggle('checked', noticeChecked);
+  btn.classList.toggle('disabled', !noticeChecked);
+}
+
+// ===== RESET =====
+function resetAll() {
+  rateValue = '';
+  amountValue = '';
+  noticeChecked = false;
+
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.remove('active', 'prev', 'exit-left');
+    s.style.transition = 'none';
+  });
+
+  const home = document.getElementById('screen-home');
+  home.classList.add('active');
+
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.screen').forEach(s => {
+      s.style.transition = '';
+    });
+  });
+
+  ['step1','step2','step3'].forEach(id => {
+    document.getElementById(id).classList.remove('show');
+  });
+
+  updateRateDisplay();
+  updateAmountDisplay();
+}
+
+// ===== INIT =====
+buildNumpad('numpad-rate', handleRateInput, { showDot: true });
+buildNumpad('numpad-amount', handleAmountInput);
+
+document.getElementById('btn-reserve').addEventListener('click', () => {
+  // Use the already selected currency from home (JPY)
+  selectedCountry = countries.find(c => c.code === 'JPY');
+  updateRateScreenLabels();
+
+  // Prefill with 2% cheaper than current rate
+  const prefillRate = (selectedCountry.rate * 0.98).toFixed(2);
+  rateValue = String(parseFloat(prefillRate));
+  updateRateDisplay();
+
+  goTo('screen-home', 'screen-rate');
+});
+
+// Update amount title when navigating to amount screen
+const origGoTo = goTo;
+// Override goTo to also update the amount screen title
+const _origGoTo = window.goTo;
+
+document.getElementById('rate-cta').addEventListener('click', () => {
+  const rate = rateValue ? formatNumber(rateValue) : '900';
+  const unit = selectedCountry.unit;
+  document.getElementById('amount-title').innerHTML =
+    `<span id="amount-rate-link" onclick="goBack('screen-amount','screen-rate')" style="text-decoration:underline; text-underline-offset:4px; cursor:pointer;">${unit} ${selectedCountry.code} = ${rate}원 이하일 때</span><br>얼마나 송금할까요?`;
+  document.getElementById('amount-currency-code').textContent = selectedCountry.code;
+  amountFocus = 'krw';
+  amountValue = '';
+  updateAmountDisplay();
+});
+</script>
+
+</body>
+</html>
